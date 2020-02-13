@@ -3,9 +3,13 @@ import java.lang.Exception
 interface Successable<out Type> {
     fun ifSuccess(action: (Type) -> Unit)
     fun successOrNull(): Type?
+    fun ifFail(action: () -> Unit)
+    val isSuccess: Boolean
 }
 interface Failable<out Error> {
+    val isFail: Boolean
     fun ifFail(action: (Error) -> Unit)
+    fun ifSuccess(action: () -> Unit)
 }
 
 sealed class Result<out Type, out Error>: Successable<Type>, Failable<Error> {
@@ -20,13 +24,31 @@ sealed class Result<out Type, out Error>: Successable<Type>, Failable<Error> {
         return this
     }
 
+    fun onSuccessUnit(action: () -> Unit): Result<Type, Error> {
+        ifSuccess(action)
+        return this
+    }
+
+    fun onFailUnit(action: () -> Unit): Result<Type, Error> {
+        ifFail(action)
+        return this
+    }
+
     class Success<Type, Error>(val res: Type) : Result<Type, Error>() {
+        override val isSuccess: Boolean = true
+        override val isFail: Boolean = false
+        override fun ifFail(action: () -> Unit) = Unit
+        override fun ifSuccess(action: () -> Unit) = action()
         override fun ifSuccess(action: (Type) -> Unit) = action(res)
         override fun successOrNull(): Type? = res
         override fun ifFail(action: (Error) -> Unit) = Unit
     }
 
     class Failure<Type, Error>(val error: Error) : Result<Type, Error>() {
+        override val isSuccess: Boolean = false
+        override val isFail: Boolean = true
+        override fun ifFail(action: () -> Unit) = action()
+        override fun ifSuccess(action: () -> Unit) = Unit
         override fun ifSuccess(action: (Type) -> Unit) = Unit
         override fun successOrNull(): Type? = null
         override fun ifFail(action: (Error) -> Unit) = action(error)
@@ -72,7 +94,14 @@ fun testResult(check: Boolean): Result<Int, Exception> {
 
 @Suppress("ThrowableNotThrown", "JoinDeclarationAndAssignment")
 fun test() {
-    val result = testResult(true)
+
+    val only = testSuccessOnly(false)
+    only.ifFail {  }
+    only.ifSuccess { it }
+    only.successOrNull()
+    
+
+    val result = testResult(false)
     result
         .onSuccess { println(it) }
         .onFail { println(it.message) }
